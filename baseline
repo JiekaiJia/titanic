@@ -1,0 +1,39 @@
+   CrossValMeans  CrossValerrors                   Algorithm
+5        0.774711        0.062967            GradientBoosting          0.792259684931391 {'learning_rate': 0.09556, 'max_depth': 3, 'min_samples_leaf': 5, 'min_samples_split': 0.015, 'n_estimators': 160}
+13       0.768313        0.055393                         SVC          0.7701782788751677 {'C': 0.6, 'gamma': 0.06, 'kernel': 'rbf'}
+0        0.754088        0.086390               XGBClassifier          0.7759003217097509 {'learning_rate': 0.06, 'max_depth': 4, 'min_child_weight': 1.1, 'n_estimators': 80, 'reg_alpha': 0.015, 'reg_lambda': 0.1}
+8        0.751379        0.046901          LogisticRegression          0.7531568955275874 {'C': 0.7334, 'class_weight': None, 'solver': 'liblinear'}
+7        0.741627        0.076493                 KNeighboors          0.7510249668162289 {'n_neighbors': 10, 'weights': 'uniform'}
+2        0.738565        0.062579                    AdaBoost          0.8377170582226763 {'base_estimator__max_depth': 6, 'base_estimator__min_samples_split': 10, 'learning_rate': 0.009778, 'n_estimators': 40}
+10       0.731677        0.040845               MultinomialNB          0.7349115900167007 {'alpha': 4.7368}
+4        0.729871        0.077506                  ExtraTrees          0.8353932584269662 {'max_depth': 8, 'max_features': 9, 'min_samples_split': 3, 'n_estimators': 30}
+
+
+   CrossValMeans  CrossValerrors           Algorithm
+3       0.792260        0.076805    GradientBoosting       0.76076
+1       0.775966        0.076742            AdaBoost       0.74880
+0       0.775900        0.077625       XGBClassifier       0.77033
+7       0.770178        0.055706                 SVC       0.77751
+2       0.760602        0.073982          ExtraTrees       0.77033
+5       0.753157        0.048295  LogisticRegression       0.77990
+4       0.751025        0.066071         KNeighboors       0.74162
+6       0.734912        0.041726       MultinomialNB       0.76076
+
+
+
+day 3
+
+   CrossValMeans  CrossValerrors           Algorithm
+6       0.871684        0.038501  LogisticRegression
+4       0.870487        0.046966    GradientBoosting
+8       0.866763        0.043584                 SVC
+0       0.855464        0.054333       XGBClassifier
+3       0.853863        0.052095          ExtraTrees
+2       0.852683        0.055531        RandomForest
+5       0.847647        0.053338         KNeighboors
+7       0.830719        0.037010       MultinomialNB
+1       0.822202        0.054338            AdaBoost
+
+
+
+

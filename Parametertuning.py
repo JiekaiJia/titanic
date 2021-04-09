@@ -1,4 +1,4 @@
-import numpy as np
+
 from sklearn.model_selection import GridSearchCV
 from xgboost import XGBClassifier
 from sklearn.linear_model import LogisticRegression, SGDClassifier
@@ -7,8 +7,6 @@ from sklearn.ensemble import RandomForestClassifier, AdaBoostClassifier, Gradien
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.naive_bayes import GaussianNB, MultinomialNB
 from sklearn.tree import DecisionTreeClassifier
-from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
-from sklearn.neural_network import MLPClassifier
 
 def search_best_SVC(x, y, kfold, random_state):
     ### SVC classifier

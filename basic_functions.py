@@ -1,4 +1,8 @@
 #!/usr/bin/env python3.8
+#  -*- coding: utf-8 -*-
+# date: 2021
+# author: Jiekai Jia
+
 """this module provides some basic functions to help analyze data."""
 from collections import Counter
 
@@ -43,14 +47,14 @@ def detect_outliers(dataframe: pd.DataFrame, n_outlier: int, features: list) -> 
 
 
 def plot_learning_curve(estimator: object, title: str, x_train: pd.DataFrame,
-                        y_train: pd.Series, cross_validation: iter = None):
+                        label_y: pd.Series, cross_validation: iter = None):
     """Generate a simple plot of the validation and training learning curve."""
     plt.figure()
     plt.title(title)
     plt.xlabel("Training examples")
     plt.ylabel("Score")
     train_sizes, train_scores, valid_scores = learning_curve(
-        estimator, x_train, y_train, cv=cross_validation, n_jobs=-1,
+        estimator, x_train, label_y, cv=cross_validation, n_jobs=-1,
         train_sizes=np.linspace(0.1, 1.0, 10), random_state=0)
     train_scores_mean = np.mean(train_scores, axis=1)
     train_scores_std = np.std(train_scores, axis=1)
@@ -90,7 +94,7 @@ def get_preprocessor_by(num_features: list, cat_features: list) -> object:
     return preprocessor
 
 
-def get_best_model(x_train: pd.DataFrame, y_train: pd.Series,
+def get_best_model(x_train: pd.DataFrame, label_y: pd.Series,
                    preprocessor: object, model: object, param_grid: dict) -> object:
     """train model with cross validation and choose the best one."""
     # create a model training pipeline with a preprocessor and the chosen model
@@ -99,7 +103,7 @@ def get_best_model(x_train: pd.DataFrame, y_train: pd.Series,
                                   ])
     # train model with GridsearchCV
     my_model = GridSearchCV(my_pipeline, cv=5, scoring='f1', param_grid=param_grid, n_jobs=-1)
-    my_model.fit(x_train, y_train)
+    my_model.fit(x_train, label_y)
     # get the best model, score and parameters
     best_params = my_model.best_params_
     best_score = my_model.best_score_

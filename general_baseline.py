@@ -1,258 +1,204 @@
-#!/usr/bin/python3.8
+"""This module gives the baseline for the very first attempt,
+it helps to understand the relationship between data and model.
+"""
 #  -*- coding: utf-8 -*-
 # date: 2021
 # author: Jiekai Jia
 
-import csv
-import pandas as pd
-import numpy as np
-from scipy import interpolate
-import matplotlib.pyplot as plt
 from itertools import cycle
+
+import joblib as jl
+from lightgbm import LGBMClassifier
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
+from scipy import interpolate
+from sklearn.ensemble import GradientBoostingClassifier
 from sklearn.feature_selection import SelectFromModel
 from sklearn.model_selection import StratifiedKFold
-from sklearn.ensemble import GradientBoostingClassifier
-from sklearn.metrics import roc_curve, auc, f1_score
-import joblib as jl
+from sklearn.metrics import (
+    auc,
+    f1_score,
+    roc_curve
+)
 from xgboost import XGBClassifier
-from lightgbm import LGBMClassifier
 
 
-def gbdt_feature_selection(fe_name: iter, matrix_x_temp: "{array-like, sparse matrix}",
-                           label_y: "{array-like, sparse matrix}", th: float) \
-        -> ("{array-like, sparse matrix}", list, int):
-    """this function select the more important features to transform the training data."""
-    # SelectfromModel
+def gbm_feature_selection(feature_names, matrix_x_temp, label_y, th_value):
+    """This function select the more important features as training
+    data with gradient boosting classifier.
+
+    Args:
+        feature_names: A list of feature names.
+        matrix_x_temp: Training data, input of the model.
+        label_y: Output of the model.
+        th_value: A threshold value, the function will take the
+            features whose importance is higher than th.
+
+    Returns:
+        A training data matrix_x after features selection,
+            the feature names that are not used and the number of the used feature names.
+    """
+    # Select from model
     clf = GradientBoostingClassifier(n_estimators=50, random_state=100)
     clf.fit(matrix_x_temp, label_y)
-    sfm = SelectFromModel(clf, prefit=True, threshold=th)
+    sfm = SelectFromModel(clf, prefit=True, threshold=th_value)
     matrix_x = sfm.transform(matrix_x_temp)
 
     # how much features whose feature importance is not zero
-    feature_score_dict = {}
-    for fn, s in zip(fe_name, clf.feature_importances_):
-        feature_score_dict[fn] = s
-    m = 0
-    for k in feature_score_dict:
-        if feature_score_dict[k] == 0.0:
-            m += 1
-    print('number of not-zero features:' + str(len(feature_score_dict) - m))
-
-    # feature importance
-    feature_score_dict_sorted = sorted(feature_score_dict.items(),
-                                       key=lambda d: d[1], reverse=True)
-    print('feature_importance:')
-    for ii in range(len(feature_score_dict_sorted)):
-        print(feature_score_dict_sorted[ii][0], feature_score_dict_sorted[ii][1])
-    print('\n')
-
-    with open('../eda/gbdt_feature_importance.txt', 'w', encoding='utf-8') as f:
-        f.write('Rank\tFeature Name\tFeature Importance\n')
-        for i in range(len(feature_score_dict_sorted)):
-            f.write(str(i) + '\t' + str(feature_score_dict_sorted[i][0]) + '\t' + str(
-                feature_score_dict_sorted[i][1]) + '\n')
-
-    # print selected feartures
-    how_long = matrix_x.shape[1]
-    feature_used_dict_temp = feature_score_dict_sorted[:how_long]
-    feature_used_name = []
-    for ii in range(len(feature_used_dict_temp)):
-        feature_used_name.append(feature_used_dict_temp[ii][0])
-    print('feature_chosen:')
-    for ii in range(len(feature_used_name)):
-        print(feature_used_name[ii])
-    print('\n')
-
-    with open('../eda/gbdt_feature_chosen.txt', 'w', encoding='utf-8') as f:
-        f.write('Chosen Feature Name :\n')
-        for i in range(len(feature_used_name)):
-            f.write(str(feature_used_name[i]) + '\n')
+    feature_score_dict = get_features_score(feature_names, clf.feature_importances_)
+    # print feature importance
+    txt_name = 'gbm_feature_importance.txt'
+    feature_score_dict_sorted = get_sorted_feature_score(feature_score_dict, txt_name)
+    # print selected features
+    txt_name = 'gbm_chosen_feature.txt'
+    used_feature_name = get_used_feature(matrix_x, feature_score_dict_sorted, txt_name)
 
     # find non-selected features
     feature_not_used_name = []
-    for i in range(len(fe_name)):
-        if fe_name[i] not in feature_used_name:
-            feature_not_used_name.append(fe_name[i])
+    for _, _feature in enumerate(feature_names):
+        if feature_names[_] not in used_feature_name:
+            feature_not_used_name.append(feature_names[_])
 
-    return matrix_x, feature_not_used_name, len(feature_used_name)
+    return matrix_x, feature_not_used_name, len(used_feature_name)
 
 
-def lgb_feature_selection(fe_name, matrix_x_temp, label_y, th):
-    # SelectfromModel
+def lgb_feature_selection(feature_names, matrix_x_temp, label_y, th_value):
+    """This function select the more important features as training data with LightGBM classifier.
+
+    Args:
+        feature_names: A list of feature names.
+        matrix_x_temp: Training data, input of the model.
+        label_y: Output of the model.
+        th_value: A threshold value, the function will take the
+            features whose importance is higher than th.
+
+    Returns:
+        A training data matrix_x after features selection,
+            the feature names that are not used and the number of the used feature names.
+    """
+    # Select from model
     clf = LGBMClassifier(n_estimators=50)
     clf.fit(matrix_x_temp, label_y)
-    sfm = SelectFromModel(clf, prefit=True, threshold=th)
+    sfm = SelectFromModel(clf, prefit=True, threshold=th_value)
     matrix_x = sfm.transform(matrix_x_temp)
 
-    # 打印出有多少特征重要性非零的特征
-    feature_score_dict = {}
-    for fn, s in zip(fe_name, clf.feature_importances_):
-        feature_score_dict[fn] = s
-    m = 0
-    for k in feature_score_dict:
-        if feature_score_dict[k] == 0.0:
-            m += 1
-    print('number of not-zero features:' + str(len(feature_score_dict) - m))
+    # how much features whose feature importance is not zero
+    feature_score_dict = get_features_score(feature_names, clf.feature_importances_)
+    # print feature importance
+    txt_name = 'lgb_feature_importance.txt'
+    feature_score_dict_sorted = get_sorted_feature_score(feature_score_dict, txt_name)
+    # print selected features
+    txt_name = 'lgb_chosen_feature.txt'
+    used_feature_name = get_used_feature(matrix_x, feature_score_dict_sorted, txt_name)
 
-    # 打印出特征重要性
-    feature_score_dict_sorted = sorted(feature_score_dict.items(),
-                                       key=lambda d: d[1], reverse=True)
-    print('feature_importance:')
-    for ii in range(len(feature_score_dict_sorted)):
-        print(feature_score_dict_sorted[ii][0], feature_score_dict_sorted[ii][1])
-    print('\n')
-
-    f = open('../eda/lgb_feature_importance.txt', 'w')
-    f.write('Rank\tFeature Name\tFeature Importance\n')
-    for i in range(len(feature_score_dict_sorted)):
-        f.write(str(i) + '\t' + str(feature_score_dict_sorted[i][0]) + '\t' + str(
-            feature_score_dict_sorted[i][1]) + '\n')
-    f.close()
-
-    # 打印具体使用了哪些字段
-    how_long = matrix_x.shape[1]  # matrix_x 是 特征选择后的 输入矩阵
-    feature_used_dict_temp = feature_score_dict_sorted[:how_long]
-    feature_used_name = []
-    for ii in range(len(feature_used_dict_temp)):
-        feature_used_name.append(feature_used_dict_temp[ii][0])
-    print('feature_chooesed:')
-    for ii in range(len(feature_used_name)):
-        print(feature_used_name[ii])
-    print('\n')
-
-    f = open('../eda/lgb_feature_chose.txt', 'w')
-    f.write('Feature Chose Name :\n')
-    for i in range(len(feature_used_name)):
-        f.write(str(feature_used_name[i]) + '\n')
-    f.close()
-
-    # 找到未被使用的字段名
+    # find non-selected features
     feature_not_used_name = []
-    for i in range(len(fe_name)):
-        if fe_name[i] not in feature_used_name:
-            feature_not_used_name.append(fe_name[i])
+    for _, _feature in enumerate(feature_names):
+        if feature_names[_] not in used_feature_name:
+            feature_not_used_name.append(feature_names[_])
 
-    # 生成一个染色体（诸如01011100这样的）
-    chromosome_temp = ''
-    feature_name_ivar = fe_name[:-1]
-    for ii in range(len(feature_name_ivar)):
-        if feature_name_ivar[ii] in feature_used_name:
-            chromosome_temp += '1'
+    # create a chromosome like 01011100
+    chromosome_temp = []
+    feature_name_ivar = feature_names[:-1]
+    for i, _ in enumerate(feature_name_ivar):
+        if feature_name_ivar[i] in used_feature_name:
+            chromosome_temp.append('1')
         else:
-            chromosome_temp += '0'
+            chromosome_temp.append('0')
+    chromosome = ''.join(chromosome_temp)
     print('Chromosome:')
-    print(chromosome_temp)
-    jl.dump(chromosome_temp, '../config/chromosome.pkl')
+    print(chromosome)
+    jl.dump(chromosome, '../config/chromosome.pkl')
     print('\n')
-    return matrix_x, feature_not_used_name[:], len(feature_used_name)
+    return matrix_x, feature_not_used_name, len(used_feature_name)
 
 
-def xgb_feature_selection(fe_name, matrix_x_temp, label_y, th):
-    # SelectfromModel
+def xgb_feature_selection(feature_names, matrix_x_temp, label_y, th_value):
+    """This function select the more important features as training data with XGB classifier.
+
+        Args:
+            feature_names: A list of feature names.
+            matrix_x_temp: Training data, input of the model.
+            label_y: Output of the model.
+            th_value: A threshold value, the function will take the
+                features whose importance is higher than th.
+
+        Returns:
+            A training data matrix_x after features selection,
+                the feature names that are not used and the number of the used feature names.
+        """
+    # Select from model
     clf = XGBClassifier(n_estimators=50)
     clf.fit(matrix_x_temp, label_y)
-    sfm = SelectFromModel(clf, prefit=True, threshold=th)
+    sfm = SelectFromModel(clf, prefit=True, threshold=th_value)
     matrix_x = sfm.transform(matrix_x_temp)
 
-    # 打印出有多少特征重要性非零的特征
-    feature_score_dict = {}
-    for fn, s in zip(fe_name, clf.feature_importances_):
-        feature_score_dict[fn] = s
-    m = 0
-    for k in feature_score_dict:
-        if feature_score_dict[k] == 0.0:
-            m += 1
-    print('number of not-zero features:' + str(len(feature_score_dict) - m))
+    # how much features whose feature importance is not zero
+    feature_score_dict = get_features_score(feature_names, clf.feature_importances_)
+    # print feature importance
+    txt_name = 'xgb_feature_importance.txt'
+    feature_score_dict_sorted = get_sorted_feature_score(feature_score_dict, txt_name)
+    # print selected features
+    txt_name = 'xgb_chosen_feature.txt'
+    used_feature_name = get_used_feature(matrix_x, feature_score_dict_sorted, txt_name)
 
-    # 打印出特征重要性
-    feature_score_dict_sorted = sorted(feature_score_dict.items(),
-                                       key=lambda d: d[1], reverse=True)
-    print('xgb_feature_importance:')
-    for ii in range(len(feature_score_dict_sorted)):
-        print(feature_score_dict_sorted[ii][0], feature_score_dict_sorted[ii][1])
-    print('\n')
-
-    f = open('../eda/xgb_feature_importance.txt', 'w')
-    f.write('Rank\tFeature Name\tFeature Importance\n')
-    for i in range(len(feature_score_dict_sorted)):
-        f.write(str(i) + '\t' + str(feature_score_dict_sorted[i][0]) + '\t' + str(
-            feature_score_dict_sorted[i][1]) + '\n')
-    f.close()
-
-    # 打印具体使用了哪些字段
-    how_long = matrix_x.shape[1]  # matrix_x 是 特征选择后的 输入矩阵
-    feature_used_dict_temp = feature_score_dict_sorted[:how_long]
-    feature_used_name = []
-    for ii in range(len(feature_used_dict_temp)):
-        feature_used_name.append(feature_used_dict_temp[ii][0])
-    print('feature_chooesed:')
-    for ii in range(len(feature_used_name)):
-        print(feature_used_name[ii])
-    print('\n')
-
-    f = open('../eda/xgb_feature_chose.txt', 'w')
-    f.write('Feature Chose Name :\n')
-    for i in range(len(feature_used_name)):
-        f.write(str(feature_used_name[i]) + '\n')
-    f.close()
-
-    # 找到未被使用的字段名
+    # find non-selected features
     feature_not_used_name = []
-    for i in range(len(fe_name)):
-        if fe_name[i] not in feature_used_name:
-            feature_not_used_name.append(fe_name[i])
+    for i, _ in enumerate(feature_names):
+        if feature_names[i] not in used_feature_name:
+            feature_not_used_name.append(feature_names[i])
 
-    # 生成一个染色体（诸如01011100这样的）
-    chromosome_temp = ''
-    feature_name_ivar = fe_name[:-1]
-    for ii in range(len(feature_name_ivar)):
-        if feature_name_ivar[ii] in feature_used_name:
-            chromosome_temp += '1'
+    # create a chromosome like 01011100
+    chromosome_temp = []
+    feature_name_ivar = feature_names[:-1]
+    for i, _ in enumerate(feature_name_ivar):
+        if feature_name_ivar[i] in used_feature_name:
+            chromosome_temp.append('1')
         else:
-            chromosome_temp += '0'
+            chromosome_temp.append('0')
+    chromosome = ''.join(chromosome_temp)
     print('Chromosome:')
-    print(chromosome_temp)
-    jl.dump(chromosome_temp, '../config/chromosome.pkl')
+    print(chromosome)
+    jl.dump(chromosome, '../config/chromosome.pkl')
     print('\n')
-    return matrix_x, feature_not_used_name[:], len(feature_used_name)
+    return matrix_x, feature_not_used_name, len(used_feature_name)
 
 
-def data_test_feature_drop(data_test, feature_name_drop):
+def test_data_feature_drop(test_data, feature_name_drop):
+    """delete the useless feature"""
     # print feature_name_drop
     for col in feature_name_drop:
-        data_test.drop(col, axis=1, inplace=True)
-    print("data_test_shape:")
-    print(data_test.shape)
-    return data_test.as_matrix()
+        test_data.drop(col, axis=1, inplace=True)
+    print("test_data_shape:")
+    print(test_data.shape)
+    return test_data.as_matrix()
 
 
-def write_predict_results_to_csv(csv_name, uid, prob_list):
-    csv_file = open(csv_name, 'wb')
-    writer = csv.writer(csv_file)
-    combined_list = [['ID', 'pred']]
-    if len(uid) == len(prob_list):
-        for i in range(len(uid)):
-            combined_list.append([str(uid[i]), str(prob_list[i])])
-        writer.writerows(combined_list)
-        csv_file.close()
+def write_results_to_csv(csv_name, predict_id, predict_list):
+    """this function output the prediction as .csv file. """
+    result_df = pd.DataFrame()
+    result_df['Id'] = predict_id
+    result_df['results'] = predict_list
+
+    # output prediction result as a .csv file
+    if len(predict_id) == len(predict_list):
+        result_df.to_csv('./data/predictions.csv', index=False)
     else:
-        print('no和pred的个数不一致')
+        print('ID number and prediction is different.')
 
 
 def xgb_lgb_cv_modeling():
-    """
+    """"""
 
-    :return:
-    """
+    # Data input
+    data_train = pd.read_csv('./data/train.csv')
+    data_predict = pd.read_csv('./data/prediction.csv')
 
-    '''Data input'''
-    data_train = pd.read_csv('../data/train.csv', index_col='ID')
-    data_predict = pd.read_csv('../data/pred.csv', index_col='ID')
-
-    '''trainset feature engineering 根据具体的数据集进行编写'''
+    # training set feature engineering
     data_train_without_label = data_train.drop('Label', axis=1)
 
-    '''Sample'''
+    # Sample
     # s = 0
     # np.random.seed(s)
     # sampler = np.random.permutation(len(data_train_without_label.values))
@@ -261,37 +207,37 @@ def xgb_lgb_cv_modeling():
     feature_name = list(data_train_without_label.columns.values)
     data_predict_user_id = list(data_predict.index.values)
 
-    '''fillna'''
+    # fillna
     frames = [data_train_without_label, data_predict]
     data_all = pd.concat(frames)
     data_train_filled = data_train_without_label.fillna(value=data_all.median())
 
-    '''construct train and test dataset'''
+    # construct train and test dataset
     x_temp = data_train_filled.iloc[:, :].as_matrix()  # 自变量
     y = data_train.iloc[:, -1].as_matrix()  # 因变量
 
-    '''Feature selection'''
+    # Feature selection
     x, dropped_feature_name, len_feature_choose = xgb_feature_selection(feature_name, x_temp, y,
                                                                         '0.1*mean')
     # 0.1*mean可以选出10个特征
     # 0.00001*mean可以选出14个特征
 
-    '''online test dataset -- B_test'''
+    # online test dataset -- B_test
     # del data_predict['V17']
     # data_predict['UserInfo_242x40'] = data_predict['UserInfo_242'] * data_predict['UserInfo_40']
 
     data_predict_filled = data_predict.fillna(value=data_all.median())
-    data_predict_filled_after_feature_selection = data_test_feature_drop(data_predict_filled,
+    data_predict_filled_after_feature_selection = test_data_feature_drop(data_predict_filled,
                                                                          dropped_feature_name)
 
-    '''Split train/test data sets'''
+    # Split train/test data sets
     cv = StratifiedKFold(n_splits=5, shuffle=True, random_state=0)  # 分层抽样  cv的意思是cross-validation
 
-    '''Choose a classification model'''
+    # Choose a classification model
     parameter_n_estimators = 100
     classifier = LGBMClassifier(n_estimators=parameter_n_estimators, learning_rate=0.1)
 
-    '''hyperparameter optimization'''
+    # hyper_parameter optimization
     # param = {
     #     'max_depth': 6,
     #     'num_leaves': 64,
@@ -319,8 +265,8 @@ def xgb_lgb_cv_modeling():
     #
     # （4）min_data_in_leaf、min_sum_hessian_in_leaf
 
-    '''Model fit, predict and ROC'''
-    colors = cycle(['cyan', 'indigo', 'seagreen', 'orange', 'blue'])
+    # Model fit, predict and ROC
+    colors = cycle(['cyan', 'indigo', 'sea_green', 'orange', 'blue'])
     lw = 2
     mean_f1 = 0.0
     mean_tpr = 0.0
@@ -385,17 +331,17 @@ def xgb_lgb_cv_modeling():
     # label_predict = a_model.predict(data_predict_filled_after_feature_selection)  # 对B_test进行预测
     proba_predict = a_model.predict_proba(data_predict_filled_after_feature_selection)
 
-    '''proba result'''
+    # proba result
     result_file_name = '../result/pred_result_XL_N_' + str(
         parameter_n_estimators) + '_features_' + str(len_feature_choose) + '_proba.csv'
-    write_predict_results_to_csv(result_file_name, data_predict_user_id,
+    write_results_to_csv(result_file_name, data_predict_user_id,
                                  proba_predict[:, 1].tolist())
 
     # '''写入要提交的结果'''
     # result_file_name = '../result/pred_result_N_' + str(parameter_n_estimators) + '_features_' + str(len_feature_choose) + '.csv'
     # write_predict_results_to_csv(result_file_name, data_predict_user_id, label_predict.tolist())
 
-    '''results file'''
+    # results file
     label_transformed = proba_predict[:, 1]
     for i in range(len(label_transformed)):
         if label_transformed[i] > th:
@@ -405,4 +351,67 @@ def xgb_lgb_cv_modeling():
     lt = label_transformed.astype('int32')
     result_file_name = '../result/pred_result_XL_N_' + str(
         parameter_n_estimators) + '_features_' + str(len_feature_choose) + '_proba_to_label_using_th_' + str(th) + '.csv '
-    write_predict_results_to_csv(result_file_name, data_predict_user_id, lt.tolist())
+    write_results_to_csv(result_file_name, data_predict_user_id, lt.tolist())
+
+
+def get_features_score(feature_names, feature_importance):
+    """This function selects the features whose importance is not zero
+    and make a dictionary that contains feature importance scores.
+    """
+    feature_score_dict = {}
+
+    # get a feature importance dictionary
+    for _feature_name, _ in zip(feature_names, feature_importance):
+        feature_score_dict[_feature_name] = _
+    # calculate the number of nonzero features
+    num_zero_features = 0
+    for _ in feature_score_dict:
+        if feature_score_dict[_] == 0.0:
+            num_zero_features += 1
+    num_nonzero_features = len(feature_score_dict) - num_zero_features
+    print('{0}: {1}'.format('number of not-zero features', num_nonzero_features))
+
+    return feature_score_dict
+
+
+def get_sorted_feature_score(feature_score_dict, txt_name):
+    """This function prints a .txt file and makes a sorted feature score dictionary."""
+    feature_score_dict_sorted = sorted(feature_score_dict.items(), key=lambda d: d[1], reverse=True)
+
+    # print sorted feature importance score
+    print('feature_importance:')
+    for _, _feature in enumerate(feature_score_dict_sorted):
+        print(feature_score_dict_sorted[_][0], feature_score_dict_sorted[_][1])
+    print('\n')
+
+    # make a file that contains feature importance score
+    with open('../feature_analysis/{}'.format(txt_name), 'w', encoding='utf-8') as _f:
+        _f.write('Rank\tFeature Name\tFeature Importance\n')
+        for _, _feature in enumerate(feature_score_dict_sorted):
+            _f.write(str(_) + '\t' + str(feature_score_dict_sorted[_][0]) + '\t' + str(
+                feature_score_dict_sorted[_][1]) + '\n')
+
+    return feature_score_dict_sorted
+
+
+def get_used_feature(matrix_x, feature_score_dict_sorted, txt_name):
+    """This function prints a .txt file and returns the used feature name."""
+    how_long = matrix_x.shape[1]
+    feature_used_dict_temp = feature_score_dict_sorted[:how_long]
+    used_feature_name = []
+
+    # print the chosen feature
+    for _, _feature in enumerate(feature_used_dict_temp):
+        used_feature_name.append(feature_used_dict_temp[_][0])
+    print('chosen_feature:')
+    for _, _feature in enumerate(used_feature_name):
+        print(used_feature_name[_])
+    print('\n')
+
+    # make a file that contains the used feature
+    with open('../feature_analysis/{}'.format(txt_name), 'w', encoding='utf-8') as _f:
+        _f.write('Chosen Feature Name :\n')
+        for _, _feature in enumerate(used_feature_name):
+            _f.write(str(used_feature_name[_]) + '\n')
+
+    return used_feature_name

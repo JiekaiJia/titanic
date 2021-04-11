@@ -1,15 +1,3 @@
-import numpy as np
-import pandas as pd
-import pprint
-import pickle
-from Pipeline import evaluate_model
-from xgboost import XGBClassifier
-from sklearn.linear_model import LogisticRegression, Perceptron, SGDClassifier
-from sklearn.svm import SVC
-from sklearn.ensemble import RandomForestClassifier, VotingClassifier, AdaBoostClassifier, ExtraTreesClassifier, GradientBoostingClassifier
-from sklearn.neighbors import KNeighborsClassifier
-from sklearn.naive_bayes import MultinomialNB
-from sklearn.tree import DecisionTreeClassifier
 from sklearn.model_selection import cross_val_score, StratifiedKFold
 
 from Parametertuning import search_best_SVC, search_best_GBoost, search_best_XGBoost, \

@@ -1,6 +1,6 @@
 from sklearn.model_selection import cross_val_score, StratifiedKFold
 
-from Parametertuning import search_best_SVC, search_best_GBoost, search_best_XGBoost, \
+from Parametertuning import search_best_svc, search_best_GBoost, search_best_XGBoost, \
     search_best_LogisticRegression, search_best_KNeighborsClassifier, \
     search_best_AdaBoostClassifier, search_best_MultinomialNB, search_best_ExtraTreesClassifier
 

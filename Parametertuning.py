@@ -5,6 +5,7 @@ it helps to understand the relationship between data and model.
 # date: 2021
 # author: Jiekai Jia
 
+from lightgbm import LGBMClassifier
 from sklearn.ensemble import (
     AdaBoostClassifier,
     ExtraTreesClassifier,
@@ -23,36 +24,43 @@ from sklearn.tree import DecisionTreeClassifier
 from xgboost import XGBClassifier
 
 
-def search_best_SVC(x, y, kfold, random_state):
-    # SVC classifier
-    # C是惩罚系数，即对误差的宽容度。c越高，说明越不能容忍出现误差,容易过拟合。C越小，容易欠拟合。C过大或过小，泛化能力变差
-    # gamma设的太大，方差会很小，方差很小的高斯分布长得又高又瘦， 会造成只会作用于支持向量样本附近，对于未知样本分类效果很差,默认值是1/k（k是特征数）
-    SVMC = SVC(probability=True, random_state=random_state)
+def search_best_svc(x, y, k_fold, random_state):
+
+    svc = SVC(probability=True, random_state=random_state)
     svc_param_grid = {
         # 'kernel': ['linear', 'poly', 'rbf', 'sigmoid'],
         'kernel': ['rbf'],
         'gamma': [0.03, 0.04, 0.05, 0.06, 0.07, 0.1],
+        # gamma by default 1/k,
+        # if too large
         'C': [0.01, 0.1, 0.6, 0.7, 0.8, 0.9, 1]
+        # C is penalty coefficient. When c is large,
+        # it's easy to over fit, and if c is small, it's easy to under fit.
     }
-    gsSVMC = GridSearchCV(SVMC, param_grid=svc_param_grid, cv=kfold, scoring='neg_log_loss', n_jobs=-1, verbose=1)
-    gsSVMC.fit(x, y)
-    return gsSVMC.best_estimator_, gsSVMC.best_score_, gsSVMC.best_params_
+    svc_model = GridSearchCV(
+        svc, param_grid=svc_param_grid,
+        cv=k_fold, scoring='neg_log_loss',
+        n_jobs=-1, verbose=1
+    )
+    svc_model.fit(x, y)
+
+    return svc_model.best_estimator_, svc_model.best_score_, svc_model.best_params_
 
 
 def search_best_XGBoost(x, y, kfold, random_state):
     # Cross validate model with Kfold stratified cross val
     XGBC = XGBClassifier(use_label_encoder=False, random_state=random_state)
     XGBC_param_grid = {
-        "learning_rate": [0.1],  # np.linspace(0.05, 0.07, 10)
+        'learning_rate': [0.1],  # np.linspace(0.05, 0.07, 10)
         'n_estimators': [60],  # range(20, 181, 10)
 
-        "max_depth": [4],  # range(2, 10)
-        "min_child_weight": [0.1],  # np.linspace(0, 0.9, 10) 在这里选了一个比较小的值，因为这是一个极不平衡的分类问题。
+        'max_depth': [4],  # range(2, 10)
+        'min_child_weight': [0.1],  # np.linspace(0, 0.9, 10) 在这里选了一个比较小的值，因为这是一个极不平衡的分类问题。
                                     # 因此，某些叶子节点下的值会比较小。
         'gamma': [4.3],  # 0,bydefault.np.linspace(0, 9, 10) Minimum loss reduction required to make a
                          # further partition on a leaf node of the tree.
-        "subsample": [0.79],  # np.linspace(0.5, 1, 20)
-        "colsample_bytree": [1],
+        'subsample': [0.79],  # np.linspace(0.5, 1, 20)
+        'colsample_bytree': [1],
         # 'reg_alpha': [1e-5, 1e-2, 0.1, 1, 100], #[1e-5, 1e-2, 0.1, 1, 100], L1 regularization term on weights,0
         # 'reg_lambda': [1e-5, 1e-2, 0.1, 1, 100], #L2 regularization term on weights,1
         # 'scale_pos_weight': [default = 1] Control the balance of positive and negative weights,
@@ -70,7 +78,7 @@ def search_best_GBoost(x, y, kfold, random_state):
     # 降低learning rate，同时会增加相应的决定树数量使得模型更加稳健
     GBC = GradientBoostingClassifier(random_state=random_state)
     GBC_param_grid = {
-        'loss': ["deviance"],
+        'loss': ['deviance'],
         'learning_rate': [0.09],  # np.linspace(0.01, 0.1, 10)
         'n_estimators': [200],  # range(1, 301, 50)
 
@@ -82,7 +90,7 @@ def search_best_GBoost(x, y, kfold, random_state):
         'subsample': [0.8],  # [0.5, 0.6, 0.7, 0.75, 0.8, 0.85, 0.9, 1]
     }
 
-    gsGBC = GridSearchCV(GBC, param_grid=GBC_param_grid, cv=kfold, scoring="accuracy", n_jobs=-1, verbose=1)
+    gsGBC = GridSearchCV(GBC, param_grid=GBC_param_grid, cv=kfold, scoring='accuracy', n_jobs=-1, verbose=1)
     gsGBC.fit(x, y)
     return gsGBC.best_estimator_, gsGBC.best_score_, gsGBC.best_params_
 
@@ -97,7 +105,7 @@ def search_best_LogisticRegression(x, y, kfold, random_state):
         # 'solver': ['liblinear'] #['liblinear', 'sag', 'lbfgs', 'newton-cg', 'saga']
     }
 
-    gsLR = GridSearchCV(LR, param_grid=LR_param_grid, cv=kfold, scoring="f1", n_jobs=-1, verbose=1)
+    gsLR = GridSearchCV(LR, param_grid=LR_param_grid, cv=kfold, scoring='f1', n_jobs=-1, verbose=1)
     gsLR.fit(x, y)
     return gsLR.best_estimator_, gsLR.best_score_, gsLR.best_params_
 
@@ -107,15 +115,15 @@ def search_best_KNeighborsClassifier(x, y, kfold):
     KNN_param_grid = [
         {
             'n_neighbors': [10],
-            'weights': ["uniform"],
+            'weights': ['uniform'],
         },
         {
             'n_neighbors': range(10, 31),
-            'weights': ["distance"],
+            'weights': ['distance'],
             'p': [1, 2]}
     ]
 
-    gsKNN = GridSearchCV(KNN, param_grid=KNN_param_grid, cv=kfold, scoring="f1", n_jobs=-1, verbose=1)
+    gsKNN = GridSearchCV(KNN, param_grid=KNN_param_grid, cv=kfold, scoring='f1', n_jobs=-1, verbose=1)
     gsKNN.fit(x, y)
     return gsKNN.best_estimator_, gsKNN.best_score_, gsKNN.best_params_
 
@@ -124,7 +132,7 @@ def search_best_MultinomialNB(x, y, kfold):
     MNB = MultinomialNB()
     MNB_param_grid = {'alpha': [4.7368]}  # np.linspace(4, 6, 20)
 
-    gsMNB = GridSearchCV(MNB, param_grid=MNB_param_grid, cv=kfold, scoring="f1", n_jobs=-1, verbose=1)
+    gsMNB = GridSearchCV(MNB, param_grid=MNB_param_grid, cv=kfold, scoring='f1', n_jobs=-1, verbose=1)
     gsMNB.fit(x, y)
     return gsMNB.best_estimator_, gsMNB.best_score_, gsMNB.best_params_
 
@@ -133,10 +141,10 @@ def search_best_SGDClassifier(x, y, kfold):
     SGDC = SGDClassifier()
     SGDC_param_grid = {
         'alpha': [0.01, 0.001, 0.0001],
-        'loss': ["hinge", "log", "modified_huber"]
+        'loss': ['hinge', 'log', 'modified_huber']
     }
 
-    gsSGDC = GridSearchCV(SGDC, param_grid=SGDC_param_grid, cv=kfold, scoring="f1", n_jobs=-1, verbose=1)
+    gsSGDC = GridSearchCV(SGDC, param_grid=SGDC_param_grid, cv=kfold, scoring='f1', n_jobs=-1, verbose=1)
     gsSGDC.fit(x, y)
     return gsSGDC.best_estimator_, gsSGDC.best_score_
 
@@ -144,12 +152,12 @@ def search_best_SGDClassifier(x, y, kfold):
 def search_best_RandomForestClassifier(x, y, kfold):
     RFC = RandomForestClassifier(oob_score=True)
     RFC_param_grid = {
-        "max_depth": range(3, 14, 2),
+        'max_depth': range(3, 14, 2),
         'min_samples_split': range(50, 201, 20),
         'min_samples_leaf': range(10, 60, 10)
     }
 
-    gsRFC = GridSearchCV(RFC, param_grid=RFC_param_grid, cv=kfold, scoring="f1", n_jobs=-1, verbose=1)
+    gsRFC = GridSearchCV(RFC, param_grid=RFC_param_grid, cv=kfold, scoring='f1', n_jobs=-1, verbose=1)
     gsRFC.fit(x, y)
     return gsRFC.best_estimator_, gsRFC.best_score_
 
@@ -157,12 +165,12 @@ def search_best_RandomForestClassifier(x, y, kfold):
 def search_best_DecisionTreeClassifier(x, y, kfold, random_state):
     DT = DecisionTreeClassifier(random_state=random_state)
     DT_param_grid = {
-        "max_depth": range(3, 14, 2),
+        'max_depth': range(3, 14, 2),
         'min_samples_split': range(50, 201, 20),
         'min_samples_leaf': range(10, 60, 10)
     }
 
-    gsDT = GridSearchCV(DT, param_grid=DT_param_grid, cv=kfold, scoring="f1", n_jobs=-1, verbose=1)
+    gsDT = GridSearchCV(DT, param_grid=DT_param_grid, cv=kfold, scoring='f1', n_jobs=-1, verbose=1)
     gsDT.fit(x, y)
     return gsDT.best_estimator_, gsDT.best_score_, gsDT.best_params_
 
@@ -171,13 +179,13 @@ def search_best_AdaBoostClassifier(x, y, kfold, random_state):
     DTC = DecisionTreeClassifier(random_state=random_state)
     adaDTC = AdaBoostClassifier(DTC, random_state=random_state)
     ada_param_grid = {
-        "base_estimator__max_depth": [6],  # range(2, 14, 1)
+        'base_estimator__max_depth': [6],  # range(2, 14, 1)
         'base_estimator__min_samples_split': [10],  # range(5, 21)
         # 'base_estimator__min_samples_leaf': [1],
-        "n_estimators": [40],  # range(30, 70, 10)
-        "learning_rate": [0.009778]  # np.linspace(0.009, 0.01, 10)
+        'n_estimators': [40],  # range(30, 70, 10)
+        'learning_rate': [0.009778]  # np.linspace(0.009, 0.01, 10)
     }
-    gsadaDTC = GridSearchCV(adaDTC, param_grid=ada_param_grid, cv=kfold, scoring="accuracy", n_jobs=4, verbose=1)
+    gsadaDTC = GridSearchCV(adaDTC, param_grid=ada_param_grid, cv=kfold, scoring='accuracy', n_jobs=4, verbose=1)
     gsadaDTC.fit(x, y)
     return gsadaDTC.best_estimator_, gsadaDTC.best_score_, gsadaDTC.best_params_
 
@@ -187,12 +195,45 @@ def search_best_ExtraTreesClassifier(x, y, kfold, random_state):
     ExtC = ExtraTreesClassifier(oob_score=True, bootstrap=True, random_state=random_state)
     # Search grid for optimal parameters
     ExtC_param_grid = {
-        "n_estimators": [30],  # range(50, 250, 50)
-        "max_depth": [8],  # range(2, 15)
-        "min_samples_split": [3],  # range(2, 21)
-        # "min_samples_leaf": range(1, 10),
-        "max_features": [9]  # range(2, 21)
+        'n_estimators': [30],  # range(50, 250, 50)
+        'max_depth': [8],  # range(2, 15)
+        'min_samples_split': [3],  # range(2, 21)
+        # 'min_samples_leaf': range(1, 10),
+        'max_features': [9]  # range(2, 21)
         }
-    gsExtC = GridSearchCV(ExtC, param_grid=ExtC_param_grid, cv=kfold, scoring="accuracy", n_jobs=4, verbose=1)
+    gsExtC = GridSearchCV(ExtC, param_grid=ExtC_param_grid, cv=kfold, scoring='accuracy', n_jobs=4, verbose=1)
     gsExtC.fit(x, y)
     return gsExtC.best_estimator_, gsExtC.best_score_, gsExtC.best_params_
+
+def search_best_lgbc(x, y, kfold, random_state):
+    # Choose a classification model
+    parameter_n_estimators = 100
+    classifier = LGBMClassifier(n_estimators=parameter_n_estimators, learning_rate=0.1)
+
+    # hyper_parameter optimization
+    # param = {
+    #     'max_depth': 6,
+    #     'num_leaves': 64,
+    #     'learning_rate': 0.03,
+    #     'scale_pos_weight': 1,
+    #     'num_threads': 40,
+    #     'objective': 'binary',
+    #     'bagging_fraction': 0.7,
+    #     'bagging_freq': 1,
+    #     'min_sum_hessian_in_leaf': 100
+    # }
+    #
+    # param['is_unbalance'] = 'true'
+    # param['metric'] = 'auc'
+
+    # （1）num_leaves
+    #
+    # LightGBM使用的是leaf - wise的算法，因此在调节树的复杂程度时，使用的是num_leaves而不是max_depth。
+    #
+    # 大致换算关系：num_leaves = 2 ^ (max_depth)
+    #
+    # （2）样本分布非平衡数据集：可以param[‘is_unbalance’]=’true’
+    #
+    # （3）Bagging参数：bagging_fraction + bagging_freq（必须同时设置）、feature_fraction
+    #
+    # （4）min_data_in_leaf、min_sum_hessian_in_leaf

@@ -2,7 +2,8 @@
 """for now I don't know write what in this section."""
 #  -*- coding: utf-8 -*-
 # date: 2021
-# author: Jiekai Jia
+# author: Jie kai Jia
+
 import warnings
 import pprint
 import pandas as pd
@@ -28,7 +29,7 @@ from sklearn.tree import DecisionTreeClassifier
 from sklearn.metrics import mean_squared_error, confusion_matrix, roc_curve, auc
 from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
 from sklearn.neural_network import MLPClassifier
-from Parametertuning import (search_best_SVC, search_best_GBoost, search_best_XGBoost,
+from Parametertuning import (search_best_svc, search_best_GBoost, search_best_XGBoost,
                              search_best_LogisticRegression, search_best_KNeighborsClassifier,
                              search_best_AdaBoostClassifier, search_best_MultinomialNB,
                              search_best_ExtraTreesClassifier)
@@ -413,3 +414,50 @@ GBCpreResultDf['Survived'] = final_pre_y
 
 # 将预测结果导出为csv文件
 GBCpreResultDf.to_csv('TitanicGBSmodle1.csv', index=False)
+
+
+def xgb_lgb_cv_modeling():
+    """"""
+
+    # Data input
+    data_train = pd.read_csv('./data/train.csv')
+    data_predict = pd.read_csv('./data/prediction.csv')
+
+    # training set feature engineering
+    data_train_without_label = data_train.drop('Label', axis=1)
+
+    # Sample
+    # s = 0
+    # np.random.seed(s)
+    # sampler = np.random.permutation(len(data_train_without_label.values))
+    # data_train_randomized = data_train_without_label.take(sampler)
+
+    feature_name = list(data_train_without_label.columns.values)
+    data_predict_user_id = list(data_predict.index.values)
+
+    # fillna
+    frames = [data_train_without_label, data_predict]
+    data_all = pd.concat(frames)
+    data_train_filled = data_train_without_label.fillna(value=data_all.median())
+
+    # construct train and test dataset
+    x_temp = data_train_filled.iloc[:, :].as_matrix()  # 自变量
+    y = data_train.iloc[:, -1].as_matrix()  # 因变量
+
+    # Feature selection
+    x, dropped_feature_name, len_feature_choose = xgb_feature_selection(feature_name, x_temp, y,
+                                                                        '0.1*mean')
+    # 0.1*mean可以选出10个特征
+    # 0.00001*mean可以选出14个特征
+
+    # online test dataset -- B_test
+    # del data_predict['V17']
+    # data_predict['UserInfo_242x40'] = data_predict['UserInfo_242'] * data_predict['UserInfo_40']
+
+    data_predict_filled = data_predict.fillna(value=data_all.median())
+    data_predict_filled_after_feature_selection = test_data_feature_drop(data_predict_filled,
+                                                                         dropped_feature_name)
+
+    # Split train/test data sets
+    cv = StratifiedKFold(n_splits=5, shuffle=True, random_state=0)  # 分层抽样  cv的意思是cross-validation
+

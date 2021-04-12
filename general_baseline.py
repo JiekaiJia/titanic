@@ -3,70 +3,29 @@ it helps to understand the relationship between data and model.
 """
 #  -*- coding: utf-8 -*-
 # date: 2021
-# author: Jiekai Jia
+# author: Jie kai Jia
 
-from itertools import cycle
+from collections import Counter
 
 import joblib as jl
-from lightgbm import LGBMClassifier
-import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-from scipy import interpolate
-from sklearn.ensemble import GradientBoostingClassifier
+from sklearn.compose import ColumnTransformer
 from sklearn.feature_selection import SelectFromModel
-from sklearn.model_selection import StratifiedKFold
-from sklearn.metrics import (
-    auc,
-    f1_score,
-    roc_curve
+from sklearn.impute import SimpleImputer
+from sklearn.model_selection import GridSearchCV
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import (
+    OneHotEncoder,
+    StandardScaler
 )
-from xgboost import XGBClassifier
 
 
-def gbm_feature_selection(feature_names, matrix_x_temp, label_y, th_value):
-    """This function select the more important features as training
-    data with gradient boosting classifier.
-
-    Args:
-        feature_names: A list of feature names.
-        matrix_x_temp: Training data, input of the model.
-        label_y: Output of the model.
-        th_value: A threshold value, the function will take the
-            features whose importance is higher than th.
-
-    Returns:
-        A training data matrix_x after features selection,
-            the feature names that are not used and the number of the used feature names.
-    """
-    # Select from model
-    clf = GradientBoostingClassifier(n_estimators=50, random_state=100)
-    clf.fit(matrix_x_temp, label_y)
-    sfm = SelectFromModel(clf, prefit=True, threshold=th_value)
-    matrix_x = sfm.transform(matrix_x_temp)
-
-    # how much features whose feature importance is not zero
-    feature_score_dict = get_features_score(feature_names, clf.feature_importances_)
-    # print feature importance
-    txt_name = 'gbm_feature_importance.txt'
-    feature_score_dict_sorted = get_sorted_feature_score(feature_score_dict, txt_name)
-    # print selected features
-    txt_name = 'gbm_chosen_feature.txt'
-    used_feature_name = get_used_feature(matrix_x, feature_score_dict_sorted, txt_name)
-
-    # find non-selected features
-    feature_not_used_name = []
-    for _, _feature in enumerate(feature_names):
-        if feature_names[_] not in used_feature_name:
-            feature_not_used_name.append(feature_names[_])
-
-    return matrix_x, feature_not_used_name, len(used_feature_name)
-
-
-def lgb_feature_selection(feature_names, matrix_x_temp, label_y, th_value):
+def feature_selection(estimator, feature_names, matrix_x_temp, label_y, th_value):
     """This function select the more important features as training data with LightGBM classifier.
 
     Args:
+        estimator: A tuple that includes model and model name
         feature_names: A list of feature names.
         matrix_x_temp: Training data, input of the model.
         label_y: Output of the model.
@@ -78,18 +37,17 @@ def lgb_feature_selection(feature_names, matrix_x_temp, label_y, th_value):
             the feature names that are not used and the number of the used feature names.
     """
     # Select from model
-    clf = LGBMClassifier(n_estimators=50)
-    clf.fit(matrix_x_temp, label_y)
-    sfm = SelectFromModel(clf, prefit=True, threshold=th_value)
+    estimator[0].fit(matrix_x_temp, label_y)
+    sfm = SelectFromModel(estimator[0], prefit=True, threshold=th_value)
     matrix_x = sfm.transform(matrix_x_temp)
 
     # how much features whose feature importance is not zero
-    feature_score_dict = get_features_score(feature_names, clf.feature_importances_)
+    feature_score_dict = get_features_score(feature_names, estimator[0].feature_importances_)
     # print feature importance
-    txt_name = 'lgb_feature_importance.txt'
+    txt_name = '{}_feature_importance.txt'.format(estimator[1])
     feature_score_dict_sorted = get_sorted_feature_score(feature_score_dict, txt_name)
     # print selected features
-    txt_name = 'lgb_chosen_feature.txt'
+    txt_name = '{}_feature_importance.txt'.format(estimator[1])
     used_feature_name = get_used_feature(matrix_x, feature_score_dict_sorted, txt_name)
 
     # find non-selected features
@@ -109,58 +67,7 @@ def lgb_feature_selection(feature_names, matrix_x_temp, label_y, th_value):
     chromosome = ''.join(chromosome_temp)
     print('Chromosome:')
     print(chromosome)
-    jl.dump(chromosome, '../config/chromosome.pkl')
-    print('\n')
-    return matrix_x, feature_not_used_name, len(used_feature_name)
-
-
-def xgb_feature_selection(feature_names, matrix_x_temp, label_y, th_value):
-    """This function select the more important features as training data with XGB classifier.
-
-        Args:
-            feature_names: A list of feature names.
-            matrix_x_temp: Training data, input of the model.
-            label_y: Output of the model.
-            th_value: A threshold value, the function will take the
-                features whose importance is higher than th.
-
-        Returns:
-            A training data matrix_x after features selection,
-                the feature names that are not used and the number of the used feature names.
-        """
-    # Select from model
-    clf = XGBClassifier(n_estimators=50)
-    clf.fit(matrix_x_temp, label_y)
-    sfm = SelectFromModel(clf, prefit=True, threshold=th_value)
-    matrix_x = sfm.transform(matrix_x_temp)
-
-    # how much features whose feature importance is not zero
-    feature_score_dict = get_features_score(feature_names, clf.feature_importances_)
-    # print feature importance
-    txt_name = 'xgb_feature_importance.txt'
-    feature_score_dict_sorted = get_sorted_feature_score(feature_score_dict, txt_name)
-    # print selected features
-    txt_name = 'xgb_chosen_feature.txt'
-    used_feature_name = get_used_feature(matrix_x, feature_score_dict_sorted, txt_name)
-
-    # find non-selected features
-    feature_not_used_name = []
-    for i, _ in enumerate(feature_names):
-        if feature_names[i] not in used_feature_name:
-            feature_not_used_name.append(feature_names[i])
-
-    # create a chromosome like 01011100
-    chromosome_temp = []
-    feature_name_ivar = feature_names[:-1]
-    for i, _ in enumerate(feature_name_ivar):
-        if feature_name_ivar[i] in used_feature_name:
-            chromosome_temp.append('1')
-        else:
-            chromosome_temp.append('0')
-    chromosome = ''.join(chromosome_temp)
-    print('Chromosome:')
-    print(chromosome)
-    jl.dump(chromosome, '../config/chromosome.pkl')
+    jl.dump(chromosome, './config/{}_chromosome.pkl'.format(estimator[1]))
     print('\n')
     return matrix_x, feature_not_used_name, len(used_feature_name)
 
@@ -183,175 +90,9 @@ def write_results_to_csv(csv_name, predict_id, predict_list):
 
     # output prediction result as a .csv file
     if len(predict_id) == len(predict_list):
-        result_df.to_csv('./data/predictions.csv', index=False)
+        result_df.to_csv('./data/{}'.format(csv_name), index=False)
     else:
         print('ID number and prediction is different.')
-
-
-def xgb_lgb_cv_modeling():
-    """"""
-
-    # Data input
-    data_train = pd.read_csv('./data/train.csv')
-    data_predict = pd.read_csv('./data/prediction.csv')
-
-    # training set feature engineering
-    data_train_without_label = data_train.drop('Label', axis=1)
-
-    # Sample
-    # s = 0
-    # np.random.seed(s)
-    # sampler = np.random.permutation(len(data_train_without_label.values))
-    # data_train_randomized = data_train_without_label.take(sampler)
-
-    feature_name = list(data_train_without_label.columns.values)
-    data_predict_user_id = list(data_predict.index.values)
-
-    # fillna
-    frames = [data_train_without_label, data_predict]
-    data_all = pd.concat(frames)
-    data_train_filled = data_train_without_label.fillna(value=data_all.median())
-
-    # construct train and test dataset
-    x_temp = data_train_filled.iloc[:, :].as_matrix()  # 自变量
-    y = data_train.iloc[:, -1].as_matrix()  # 因变量
-
-    # Feature selection
-    x, dropped_feature_name, len_feature_choose = xgb_feature_selection(feature_name, x_temp, y,
-                                                                        '0.1*mean')
-    # 0.1*mean可以选出10个特征
-    # 0.00001*mean可以选出14个特征
-
-    # online test dataset -- B_test
-    # del data_predict['V17']
-    # data_predict['UserInfo_242x40'] = data_predict['UserInfo_242'] * data_predict['UserInfo_40']
-
-    data_predict_filled = data_predict.fillna(value=data_all.median())
-    data_predict_filled_after_feature_selection = test_data_feature_drop(data_predict_filled,
-                                                                         dropped_feature_name)
-
-    # Split train/test data sets
-    cv = StratifiedKFold(n_splits=5, shuffle=True, random_state=0)  # 分层抽样  cv的意思是cross-validation
-
-    # Choose a classification model
-    parameter_n_estimators = 100
-    classifier = LGBMClassifier(n_estimators=parameter_n_estimators, learning_rate=0.1)
-
-    # hyper_parameter optimization
-    # param = {
-    #     'max_depth': 6,
-    #     'num_leaves': 64,
-    #     'learning_rate': 0.03,
-    #     'scale_pos_weight': 1,
-    #     'num_threads': 40,
-    #     'objective': 'binary',
-    #     'bagging_fraction': 0.7,
-    #     'bagging_freq': 1,
-    #     'min_sum_hessian_in_leaf': 100
-    # }
-    #
-    # param['is_unbalance'] = 'true'
-    # param['metric'] = 'auc'
-
-    # （1）num_leaves
-    #
-    # LightGBM使用的是leaf - wise的算法，因此在调节树的复杂程度时，使用的是num_leaves而不是max_depth。
-    #
-    # 大致换算关系：num_leaves = 2 ^ (max_depth)
-    #
-    # （2）样本分布非平衡数据集：可以param[‘is_unbalance’]=’true’
-    #
-    # （3）Bagging参数：bagging_fraction + bagging_freq（必须同时设置）、feature_fraction
-    #
-    # （4）min_data_in_leaf、min_sum_hessian_in_leaf
-
-    # Model fit, predict and ROC
-    colors = cycle(['cyan', 'indigo', 'sea_green', 'orange', 'blue'])
-    lw = 2
-    mean_f1 = 0.0
-    mean_tpr = 0.0
-    mean_fpr = np.linspace(0, 1, 500)
-    i_of_roc = 0
-    a = 0
-
-    th = 0.5
-
-    for (train_indice, test_indice), color in zip(cv.split(x, y), colors):
-        a_model = classifier.fit(x[train_indice], y[train_indice])
-
-        # y_predict_label = a_model.predict(x[test_indice])
-
-        probas_ = a_model.predict_proba(x[test_indice])
-
-        fpr, tpr, thresholds = roc_curve(y[test_indice], probas_[:, 1])
-
-        a += 1
-
-        mean_tpr += interpolate(mean_fpr, fpr, tpr)
-        mean_tpr[0] = 0.0
-
-        roc_auc = auc(fpr, tpr)
-        plt.plot(fpr, tpr, lw=lw, color=color,
-                 label='ROC fold %d (area = %0.4f)' % (i_of_roc, roc_auc))
-        i_of_roc += 1
-
-        label_transformed = probas_[:, 1]
-        for i in range(len(label_transformed)):
-            if label_transformed[i] > th:
-                label_transformed[i] = 1
-            else:
-                label_transformed[i] = 0
-        lt = label_transformed.astype('int32')
-        f1 = f1_score(y[test_indice], lt)
-        mean_f1 += f1
-
-    plt.plot([0, 1], [0, 1], linestyle='--', lw=lw, color='k', label='Luck')
-
-    mean_tpr /= cv.get_n_splits(x, y)
-    mean_tpr[-1] = 1.0
-    mean_auc = auc(mean_fpr, mean_tpr)
-    print('mean_auc=' + str(mean_auc))
-    print('mean_f1=' + str(mean_f1 / 5))
-    plt.plot(mean_fpr, mean_tpr, color='g', linestyle='--',
-             label='Mean ROC (area = %0.4f)' % mean_auc, lw=lw)
-    plt.xlim([-0.01, 1.01])
-    plt.ylim([-0.01, 1.01])
-    plt.xlabel('False Positive Rate mean_f1:' + str(mean_f1))
-    plt.ylabel('True Positive Rate')
-
-    plt.title('ROC_gbdt_' + str(len_feature_choose) + '_features_f1_' + str(mean_f1 / 5))
-    plt.legend(loc="lower right")
-    plt.savefig('../result/pred_ROC_XL' + '_N_' + str(parameter_n_estimators) + '_features_' + str(
-        len_feature_choose) +
-                '_proba_to_label_using_th_' + str(th) + '.png')
-    # plt.show()
-
-    a_model = classifier.fit(x, y)
-
-    # label_predict = a_model.predict(data_predict_filled_after_feature_selection)  # 对B_test进行预测
-    proba_predict = a_model.predict_proba(data_predict_filled_after_feature_selection)
-
-    # proba result
-    result_file_name = '../result/pred_result_XL_N_' + str(
-        parameter_n_estimators) + '_features_' + str(len_feature_choose) + '_proba.csv'
-    write_results_to_csv(result_file_name, data_predict_user_id,
-                                 proba_predict[:, 1].tolist())
-
-    # '''写入要提交的结果'''
-    # result_file_name = '../result/pred_result_N_' + str(parameter_n_estimators) + '_features_' + str(len_feature_choose) + '.csv'
-    # write_predict_results_to_csv(result_file_name, data_predict_user_id, label_predict.tolist())
-
-    # results file
-    label_transformed = proba_predict[:, 1]
-    for i in range(len(label_transformed)):
-        if label_transformed[i] > th:
-            label_transformed[i] = 1
-        else:
-            label_transformed[i] = 0
-    lt = label_transformed.astype('int32')
-    result_file_name = '../result/pred_result_XL_N_' + str(
-        parameter_n_estimators) + '_features_' + str(len_feature_choose) + '_proba_to_label_using_th_' + str(th) + '.csv '
-    write_results_to_csv(result_file_name, data_predict_user_id, lt.tolist())
 
 
 def get_features_score(feature_names, feature_importance):
@@ -415,3 +156,67 @@ def get_used_feature(matrix_x, feature_score_dict_sorted, txt_name):
             _f.write(str(used_feature_name[_]) + '\n')
 
     return used_feature_name
+
+
+def detect_outliers(dataframe: pd.DataFrame, n_outlier: int, features: list) -> list:
+    """Takes a dataframe df of features and returns a list of the indices
+    corresponding to the observations containing more than n outliers according
+    to the Tukey method.
+    """
+    outlier_indices = []
+    # iterate over features(columns)
+    for col in features:
+        # 1st quartile (25%)
+        value_q1 = np.percentile(dataframe[col], 25)
+        # 3rd quartile (75%)
+        value_q3 = np.percentile(dataframe[col], 75)
+        # Interquartile range (IQR)
+        iqr = value_q3 - value_q1
+        # outlier step
+        outlier_step = 1.5 * iqr
+        # Determine a list of indices of outliers for feature col
+        outlier_list_col = dataframe[(dataframe[col] < value_q1 - outlier_step)
+                                     | (dataframe[col] > value_q3 + outlier_step)].index
+        # append the found outlier indices for col to the list of outlier indices
+        outlier_indices.extend(outlier_list_col)
+    # select observations containing more than n outliers
+    outlier_indices = Counter(outlier_indices)
+    multiple_outliers = list(_ for _ in outlier_indices if outlier_indices[_] > n_outlier)
+
+    return multiple_outliers
+
+
+def get_preprocessor_by(num_features: list, cat_features: list) -> object:
+    """get a preprocessing pipeline with the given numeric and categorical features."""
+    # a pipeline that imputes and scales numeric features
+    numerical_transformer = Pipeline(steps=[("impute", SimpleImputer(strategy="mean")),
+                                            ('scale', StandardScaler())
+                                            ])
+    # a pipeline that imputes categorical features and transforms features into one_shot code
+    categorical_transformer = Pipeline(steps=[("impute", SimpleImputer(strategy="most_frequent")),
+                                              ("one_hot", OneHotEncoder(handle_unknown="ignore"))
+                                              ])
+    # a transformer that combines numerical and categorical pipeline
+    preprocessor = ColumnTransformer(transformers=[("num", numerical_transformer, num_features),
+                                                   ("cat", categorical_transformer, cat_features)
+                                                   ])
+
+    return preprocessor
+
+
+def get_best_model(x_train: pd.DataFrame, label_y: pd.Series,
+                   preprocessor: object, model: object, param_grid: dict) -> object:
+    """train model with cross validation and choose the best one."""
+    # create a model training pipeline with a preprocessor and the chosen model
+    my_pipeline = Pipeline(steps=[('preprocessor', preprocessor),
+                                  ('model', model)
+                                  ])
+    # train model with GridsearchCV
+    my_model = GridSearchCV(my_pipeline, cv=5, scoring='f1', param_grid=param_grid, n_jobs=-1)
+    my_model.fit(x_train, label_y)
+    # get the best model, score and parameters
+    best_params = my_model.best_params_
+    best_score = my_model.best_score_
+    best_estimator = my_model.best_estimator_
+
+    return best_score, best_params, best_estimator

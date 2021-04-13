@@ -29,10 +29,10 @@ from sklearn.tree import DecisionTreeClassifier
 from sklearn.metrics import mean_squared_error, confusion_matrix, roc_curve, auc
 from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
 from sklearn.neural_network import MLPClassifier
-from Parametertuning import (search_best_svc, search_best_GBoost, search_best_XGBoost,
-                             search_best_LogisticRegression, search_best_KNeighborsClassifier,
-                             search_best_AdaBoostClassifier, search_best_MultinomialNB,
-                             search_best_ExtraTreesClassifier)
+from parameter_tuning import (search_best_svc, search_best_gbm, search_best_xgb,
+                              search_best_lrm, search_best_knn,
+                              search_best_ada, search_best_mnb,
+                              search_best_etm)
 
 warnings.filterwarnings('ignore')
 sns.set(style='white', context='notebook', palette='deep')
@@ -322,7 +322,7 @@ classifiers = []
 # XGB_best, XGB_score, XGB_params = search_best_XGBoost(X_train, Y_train, kfold, RANDOM_STATE)
 # print(XGB_score, XGB_params)
 # LR
-LR_best, LR_score, LR_params = search_best_LogisticRegression(X_train, Y_train, k_fold, RANDOM_STATE)
+LR_best, LR_score, LR_params = search_best_lrm(X_train, Y_train, k_fold, RANDOM_STATE)
 print(LR_score, LR_params)
 # KNN
 # KNN_best, KNN_score, KNN_params = search_best_KNeighborsClassifier(X_train, Y_train, k_fold)
